@@ -1,6 +1,7 @@
 const fs = require("fs");
 const express = require("express");
 const https = require('https');
+const cookieParser = require('cookie-parser')
 const { body, validationResult } = require('express-validator');
 
 require('dotenv').config();
@@ -10,99 +11,107 @@ const dbService = require("./services/db");
 
 const auth = require("./controllers/auth");
 
-// const userModel = require("./models/User");
-const headers = {
-	"Content-Type": "application/json",
-	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Allow-Methods": "GET, POST",
-	"Access-Control-Allow-Private-Network": "true",
-	"Access-Control-Allow-Headers": "headers, method, content-type, body, id, apiKey"
-};
+const { setResponseHeaders, send404 } = require("./utils/utils");
 
+// const userModel = require("./models/User");
+
+/**
+ * Initialises the ExpressJs app (makes the app.js file look a bit cleaner).
+ */
 const init = () => {
 	const port = process.env.NODE_ENV.trim() === "development" ? 5000 : 3000;
 	const app = express();
 	
 	app.use(express.urlencoded({ extended: true }));
+	app.use(cookieParser());
 	
 	app.use(dbService());
 	app.use(userService());
 
 	app.get("/", (req, res) => {
-		res.set(headers);
+		setResponseHeaders(req, res);
 		res.send(JSON.stringify({"test": "yay"}, null, 4));
-		// res.send("Hello World!");
 	});
 
-	app.route("/register")
-		.get((req, res) => {
-			res.set(headers);
-			res.send(JSON.stringify({Errors: "You shouldn't be trying this..."}, null, 4));
-		})
-		.post(
-			body("username")
-				.trim()
-				.isLength({ min: 3 })
-				.withMessage("length")
-				.matches(/[a-zA-Zа-яА-Я0-9.'\s]+/)
-				.withMessage("language"),
-			body("password")
-				.trim()
-				.isLength({ min: 6 })
-				.withMessage("length")
-				.matches(/[a-zA-Zа-яА-Я0-9]+/)
-				.withMessage("language"),
-			body("rePassword")
-				.trim()
-				.custom((value, { req }) => {
-					return value === req.body.password
-				})
-				.withMessage("passMatch"),
-				(req, res) => {
-					const errors = validationResult(req);
-					if (!errors.isEmpty()) {
-						// !!!ERROR!!!
-						return console.log({ errors: errors.array() });
-					}
+	app.post("/register",
+		body("username")
+			.trim()
+			.isLength({ min: 3 })
+			.withMessage("length")
+			.matches(/[a-zA-Zа-яА-Я0-9.'\s]+/)
+			.withMessage("language"),
+		body("password")
+			.trim()
+			.isLength({ min: 6 })
+			.withMessage("length")
+			.matches(/[a-zA-Zа-яА-Я0-9]+/)
+			.withMessage("language"),
+		body("rePassword")
+			.trim()
+			.custom((value, { req }) => {
+				return value === req.body.password
+			})
+			.withMessage("passMatch"),
+		(req, res) => {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				// !!!ERROR!!!
+				return console.log({ errors: errors.array() });
+			};
 
-					auth.post(req, res);
-				}
-		);
+			auth.post(req, res);
+		}
+	);
 
-	app.route("/login")
+	app.post("/login",
+		body("username")
+			.trim()
+			.matches(/[a-zA-Zа-яА-Я0-9.'\s]+/)
+			.withMessage("language"),
+		body("password")
+			.trim()
+			.matches(/[a-zA-Zа-яА-Я0-9]+/)
+			.withMessage("language"),
+		(req, res) => {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				// !!!ERROR!!!
+				return console.log({ errors: errors.array() });
+			};
+
+			auth.post(req, res);
+		}
+	);
+
+	app.post("/checkIfLogged", (req, res) => {
+		setResponseHeaders(req, res);
+		auth.post(req, res);
+		// res.send(JSON.stringify({"test": "yay"}, null, 4));
+	});
+
+	app.route("*")
 		.get((req, res) => {
-			res.set(headers);
-			res.send(JSON.stringify({Errors: "You shouldn't be trying this..."}, null, 4));
+			setResponseHeaders(req, res);
+			send404(res);
 		})
-		.post(
-			body("username")
-				.trim()
-				.isLength({ min: 3 })
-				.withMessage("length")
-				.matches(/[a-zA-Zа-яА-Я0-9.'\s]+/)
-				.withMessage("language"),
-			body("password")
-				.trim()
-				.isLength({ min: 6 })
-				.withMessage("length")
-				.matches(/[a-zA-Zа-яА-Я0-9]+/)
-				.withMessage("language"),
-			auth.post
-		);
+		.post((req, res) => {
+			setResponseHeaders(req, res);
+			send404(res);
+		});
 
 	app.listen(port, () => {
-		console.log(`rest scorester listening on http://localhost:${port}`);
+		console.log(`rest scorester listening on http://192.168.0.185:${port}`);
 	});
 
-	if (process.env.NODE_ENV === "development ") {
+	if (process.env.NODE_ENV.trim() === "development") {
 		const httpsPort = port + 1;
 		const secured = https.createServer(
-			{ key: fs.readFileSync("./ssl/localhost.pem"), cert: fs.readFileSync("./ssl/localhost.pem") },
+			{ key: fs.readFileSync("./ssl/localhost.pem"), cert: fs.readFileSync("./ssl/localhost.crt") },
 			app
 		);
 		
 		secured.listen(httpsPort, function() {
-			console.log(`rest scorester listening on https://localhost:${httpsPort}`)
+			console.log(`rest scorester listening on https://192.168.0.185:${httpsPort}`)
 		});
 	};
 };

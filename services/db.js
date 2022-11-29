@@ -15,7 +15,7 @@ const db = mysql.createConnection(dbParams);
  * The key represents the table that will be queried.
  * The value represents the fields that will be created.
  */
-async function createEntry(data) {
+function createEntry(data) {
     const table = Object.keys(data)[0];
     const fieldKeys = Object.keys(data[table]).join(", ");
     const fieldValues = Object.values(data[table]).map(el => `'${el}'`).join(", ");
@@ -28,13 +28,14 @@ async function createEntry(data) {
  * Get a database entry.
  * @param {Object} data Contains one key value pair.
  * The key represents the table that will be queried.
- * The value represents the fields that will form the query.
+ * The value represents the fields that will form the query, which again are key value pairs.
  */
-function getEntry(res, data) {
-    const fields = getQueryFields(data);
-    const query = `SELECT * FROM users WHERE ${fields.join(" AND ")};`;
-
+function getEntry(data) {
+    const table = Object.keys(data)[0];
+    const fields = formatFields(data[table]);
+    const query = `SELECT * FROM ${table} WHERE ${fields.join(" AND ")};`;
     return makeQuery(query);
+    // return new Promise((res, rej) => res([]));
 };
 
 /**
@@ -43,8 +44,12 @@ function getEntry(res, data) {
  * The key represents the table that will be queried.
  * The value represents the fields that will be updated.
  */
-async function updateEntry(data) {
+function updateEntry(id, data) {
+    const table = Object.keys(data)[0];
+    const fields = formatFields(data[table]);
+    const query = `UPDATE ${table} SET ${fields} WHERE id='${id}';`;
 
+    return makeQuery(query);
 };
 
 /**
@@ -57,21 +62,34 @@ async function deleteEntry(data) {
 
 };
 
+
+/**
+ * Makes a database query.
+ * @param {String} query An SQL statement (SELECT, INSERT, UPDATE, DELETE).
+ * @returns Alwayes a resolved promise in order to keep the error handling here.
+ */
 async function makeQuery(query) {
     return new Promise((resolve, reject) => {
         db.query(query, function (error, results, fields) {
+            let res = [];
             if (error) {
                 // !!!ERROR!!!
-                console.log(error)
-                return resolve([]);
+                console.log("makeQuery", error)
+            } else {
+                res = results;
             };
 
-            return resolve(results);
+            return resolve(res);
         });
     });
 };
 
-function getQueryFields(data) {
+/**
+ * Formats the key value pairs for a query.
+ * @param {Object} data An object containing key value pairs representing columns and values.
+ * @returns An array of strings that are ready to form a query.
+ */
+function formatFields(data) {
     return Object.entries(data).map(el => {
         el[1] = `'${el[1]}'`;
         return el.join("=");
@@ -81,9 +99,10 @@ function getQueryFields(data) {
 module.exports = () => (req, res, next) => {
     req.db = {
         createEntry: (data) => createEntry(data),
-        getEntry: (...params) => getEntry(res, ...params),
-        updateEntry: () => updateEntry(req.session),
-        deleteEntry: (...params) => deleteEntry(req.session, ...params)
+        getEntry: (data) => getEntry(data),
+        updateEntry: (...params) => updateEntry(...params),
+        deleteEntry: (data) => deleteEntry(data)
     };
+
     next();
 };

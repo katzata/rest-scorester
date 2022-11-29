@@ -1,24 +1,35 @@
 const bcrypt = require("bcrypt");
-const saltRounds = 10;
+const saltRounds = Number(process.env.JWT_SALT_ROUNDS);
 
-async function hashPassword(password) {
+/**
+ * Generates a hash.
+ * @param {String} input The string to be hashed.
+ * @returns A promise that will always be resolved despyte the result.
+ */
+async function generateHash(input) {
     return new Promise((resolve) => {
-        bcrypt.hash(password, saltRounds, function(err, hash) {
+        bcrypt.hash(input, saltRounds, function(err, hash) {
+            if (err) console.log(err);
             resolve(hash);
         });
     });
 };
 
-async function checkPassword(password, hash) {
-    return new Promise((resolve) => {
-        bcrypt.compare(password, hash).then(function(result) {
-            resolve("yay");
-            // result == true
+/**
+ * Validates a hash.
+ * @param {String} input Standard user input.
+ * @param {String} hash The stored hash.
+ * @returns A promise that will always be resolved despyte the result.
+ */
+async function validateHash(input, hash) {
+    return await new Promise((resolve) => {
+        bcrypt.compare(input, hash).then(function(result) {
+            resolve(result);
         });
     });
 };
 
 module.exports = {
-    hashPassword,
-    checkPassword
+    generateHash,
+    validateHash
 };
