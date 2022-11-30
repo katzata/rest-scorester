@@ -1,13 +1,12 @@
 const mysql = require('mysql');
 
-const dbParams = {
+const db = mysql.createPool({
+    connectionLimit : 1,
     host: "localhost",
     user: "root",
     password: "",
     database: "scorester"
-};
-
-const db = mysql.createConnection(dbParams);
+});
 
 /**
  * Create a database entry.
@@ -59,9 +58,8 @@ function updateEntry(id, data) {
  * The value represents the id(row) that will be deleted.
  */
 async function deleteEntry(data) {
-
+    
 };
-
 
 /**
  * Makes a database query.
@@ -72,9 +70,12 @@ async function makeQuery(query) {
     return new Promise((resolve, reject) => {
         db.query(query, function (error, results, fields) {
             let res = [];
+            
             if (error) {
                 // !!!ERROR!!!
-                console.log("makeQuery", error)
+                const { stack, message, errno, code, syscall, address, port, fatal } = error;
+                res.push({ error: { code: 503, list: ["No connection to the database."]} });
+                console.log("makeQuery", `stack: ${stack}\n`, `message: ${message}\n`, `errno: ${errno}\n`, `code: ${code}\n`,`syscall: ${syscall}\n`, `address: ${address}\n`, `port: ${port}\n`, fatal)
             } else {
                 res = results;
             };

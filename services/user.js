@@ -47,21 +47,15 @@ async function register(req, res) {
                 req.db.updateEntry(updateData).then(updateRes => {
 
                     setResponseHeaders(req, res);
-                    setTokens(res, accessToken, refreshToken);
-                    res.send(JSON.stringify(jsonResponse, null, 4));
+                    setTokens(res, accessToken, refreshToken)
+                        .status(201)
+                        .send(JSON.stringify(jsonResponse, null, 4));
                 });
             });
         } else {
             res.send(JSON.stringify({ Errors: `The username ${username} is already registered`}, null, 4));
         };
     });
-
-    // console.log("x", validateAccessToken(token));
-    // console.log("y", validateRefreshToken(refreshToken));
-    // req.db.createEntry(data).then(res => {
-        // DONE
-        // console.log(res);
-    // });
 };
 
 /**
@@ -74,8 +68,8 @@ async function login(req, res) {
 
     req.db.getEntry(query).then(response => {
         const user = response[0];
-
-        if (user) {
+        
+        if (user && user.id) {
             const { id, password } = user;
 
             validatePassword(req.body.password, password).then((passCheckRes) => {
@@ -87,19 +81,26 @@ async function login(req, res) {
                     req.db.updateEntry(id, updateData).then(updateRes => {
                         setResponseHeaders(req, res);
                         setTokens(res, accessToken, refreshToken).then((tokenRes) => {
-                            tokenRes.send(prepareUserData(userData, null, 4));
+                            tokenRes
+                                .status(202)
+                                .send(prepareUserData(userData, null, 4));
                         });
                     });
                 } else {
                     // !!!ERROR!!!
-                    setResponseHeaders(req, res)
-                        .send({ Errors: "Wrong username or password"});
+                    console.log(passCheckRes);
+                    req.errorHandling.sendErrors({ code: 409, list: ["Wrong username or password"]});
+                    // setResponseHeaders(req, res)
+                    //     .status(409)
+                    //     .send({ Errors: "Wrong username or password"});
                 };
             });
         } else {
+            console.log("xaaaaaaaa", user);
+            const errorMessage = user.hasOwnProperty("error") ? user.error : { code: 409, list: ["Wrong username or password"]};
             // !!!ERROR!!!
             setResponseHeaders(req, res);
-            res.send({ Errors: "Wrong username or password"});
+            req.errorHandling.sendErrors(errorMessage);
         };
     });
 };

@@ -8,6 +8,7 @@ require('dotenv').config();
 
 const userService = require("./services/user");
 const dbService = require("./services/db");
+const errorHandlingService = require("./services/errorHandling");
 
 const auth = require("./controllers/auth");
 
@@ -27,6 +28,7 @@ const init = () => {
 	
 	app.use(dbService());
 	app.use(userService());
+	app.use(errorHandlingService());
 
 	app.get("/", (req, res) => {
 		setResponseHeaders(req, res);
