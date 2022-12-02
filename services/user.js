@@ -20,40 +20,43 @@ async function register(req, res) {
         "individualTimers": false
     };
 
-    const query = { username: req.body.username };
+    const query = { users: { username: req.body.username }};
     req.db.getEntry(query).then(queryRes => {
+        if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
         const exists = queryRes[0];
 
         if (!exists) {
-            const data = {
-                users: {
-                    username,
-                    password: hashedPass,
-                    user_settings: JSON.stringify(userSettings),
-                    game_settings: JSON.stringify(gameSettings),
-                    ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress
-                }
+            const users = {
+                username,
+                password: hashedPass,
+                user_settings: JSON.stringify(userSettings),
+                game_settings: JSON.stringify(gameSettings)
             };
 
-            req.db.createEntry(data).then(createRes => {
-                const { insertId } = createRes;
-                const accessToken = generateAccessToken({ insertId, username });
-                const refreshToken = generateRefreshToken({ insertId, username, token: accessToken });
-                const jsonResponse = data.users;
-                jsonResponse.id = insertId;
-                
-                
+            req.db.createEntry({ users }).then(createRes => {
+                if (createRes[0] && createRes[0].error) return catchDbErrors(req, createRes[0].error);
 
-                req.db.updateEntry(updateData).then(updateRes => {
+                users["id"] = createRes.insertId;
+                const { accessToken, refreshToken } = generateTokens(users);
+                users["token"] = refreshToken;
+
+                req.db.updateEntry(createRes.insertId, { users: { token: refreshToken } }).then(updateRes => {
+                    if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error);
 
                     setResponseHeaders(req, res);
-                    setTokens(res, accessToken, refreshToken)
-                        .status(201)
-                        .send(JSON.stringify(jsonResponse, null, 4));
+                    setHTTPCookies(res, accessToken, refreshToken).then((tokenRes) => {
+                        tokenRes
+                            .status(201)
+                            .send(prepareUserData(users, null, 4));
+                    });
                 });
             });
         } else {
-            res.send(JSON.stringify({ Errors: `The username ${username} is already registered`}, null, 4));
+            if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
+
+            setResponseHeaders(req, res)
+                .status(200)
+                .send(JSON.stringify({ Errors: `The username ${username} is already registered`}, null, 4));
         };
     });
 };
@@ -66,40 +69,34 @@ async function register(req, res) {
 async function login(req, res) {
     const query = { users: { username: req.body.username }};
 
-    req.db.getEntry(query).then(response => {
-        const user = response[0];
+    req.db.getEntry(query).then(queryRes => {
+        if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
+
+        const user = queryRes[0];
         
         if (user && user.id) {
-            const { id, password } = user;
-
-            validatePassword(req.body.password, password).then((passCheckRes) => {
+            validatePassword(req.body.password, user.password).then((passCheckRes) => {
                 if (passCheckRes) {
                     const userData = extractUserData(user);
                     const { accessToken, refreshToken } = generateTokens(user);
 
-                    const updateData = { users: { token: refreshToken, test: "test" }};
-                    req.db.updateEntry(id, updateData).then(updateRes => {
+                    const updateData = { users: { token: refreshToken }};
+                    req.db.updateEntry(userData.id, updateData).then(updateRes => {
+                        if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error)
+
                         setResponseHeaders(req, res);
-                        setTokens(res, accessToken, refreshToken).then((tokenRes) => {
+                        setHTTPCookies(res, accessToken, refreshToken).then((tokenRes) => {
                             tokenRes
                                 .status(202)
                                 .send(prepareUserData(userData, null, 4));
                         });
                     });
                 } else {
-                    // !!!ERROR!!!
-                    console.log(passCheckRes);
                     req.errorHandling.sendErrors({ code: 409, list: ["Wrong username or password"]});
-                    // setResponseHeaders(req, res)
-                    //     .status(409)
-                    //     .send({ Errors: "Wrong username or password"});
                 };
             });
         } else {
-            console.log("xaaaaaaaa", user);
-            const errorMessage = user.hasOwnProperty("error") ? user.error : { code: 409, list: ["Wrong username or password"]};
-            // !!!ERROR!!!
-            setResponseHeaders(req, res);
+            const errorMessage = user.error ? user.error : { code: 409, list: ["Wrong username or password"]};
             req.errorHandling.sendErrors(errorMessage);
         };
     });
@@ -111,9 +108,18 @@ async function login(req, res) {
  * @param {Object} res The response object generated by "ExpressJs";
  */
 async function logout(req, res) {
-    res
-        .clearCookie("aToken")
-        .clearCookie("rToken");
+    const { id } = validateToken(req.cookies.rToken);
+    const updateData = { users: { token: "" } };
+
+    req.db.updateEntry(id, updateData).then(updateRes => {
+        if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error)
+
+        setResponseHeaders(req, res)
+            .clearCookie("aToken")
+            .clearCookie("rToken")
+            .status(201)
+            .send(JSON.stringify({"res": "yay"}));
+    });
 };
 
 /**
@@ -124,11 +130,25 @@ async function logout(req, res) {
 async function checkIfLogged(req, res) {
     const id = req.body && req.body.id ? req.body.id : null;
 
-    if (id) {
-        console.log(`${id}\n`, req.headers);
-    };
+    if (id && req.cookies.rToken) {
+        req.db.getEntry({ users: { id }}).then(queryRes => {
+            if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
+            const { aToken, rToken } = req.cookies;
 
-    res.send(`${id}`)
+            if (rToken) {
+                const user = extractUserData(queryRes[0]);
+                const tokenData = validateToken(rToken);
+
+                if (tokenData) {
+                    setResponseHeaders(req, res)
+                        .status(200)
+                        .send(prepareUserData(user, null, 4));
+                } else {
+                    setResponseHeaders(req, res).status(200);
+                };
+            };
+        });
+    };
 };
 
 /**
@@ -136,15 +156,15 @@ async function checkIfLogged(req, res) {
  * @param {Object} data An object containing key value pairs representing the columns and values that will be updated.
  */
 async function update(data) {
+    console.log();
     // req.db.updateEntry(id, updateData).then(updateRes => {
     //     console.log("updateRes", updateRes);
         
-    setResponseHeaders(req, res);
-    //     setTokens(res, accessToken, refreshToken)
+    // setResponseHeaders(req, res);
+    //     setHTTPCookies(res, accessToken, refreshToken)
     //         .send(prepareUserData(userData, null, 4));
     // });
 };
-
 
 /**
  * Validates a passowrd.
@@ -158,7 +178,7 @@ async function validatePassword(inputPass, password) {
 
 /**
  * Generate the access and refresh JWT tokens.
- * @param {Object} user an object containing user data (i, username, etc.).
+ * @param {Object} user an object containing user data (id, username, etc.).
  * @returns An object containing two key value pairs that represent the access and refresh tokens and their respective values.
  */
 function generateTokens(user) {
@@ -170,11 +190,21 @@ function generateTokens(user) {
 };
 
 /**
- * 
+ * Validate refresh JWT token.
+ * @param {String} user The JWT token.
+ * @returns EIther the decrypted data of null in case the token is not ok.
+ */
+ function validateToken(token) {
+    const result = validateRefreshToken(token);
+    return result.id ? result : null;
+};
+
+/**
+ * Sets http only cookies.
  * @param {Object} res The response object generated by "ExpressJs".
  * @returns the "ExpressJs" res.cookie() function (while setting the headers) in order to keep it chainable.
  */
-async function setTokens(res, accessToken, refreshToken) {
+async function setHTTPCookies(res, accessToken, refreshToken) {
     const cookieOptions = {
         httpOnly: true,
         sameSite: "None",
@@ -190,7 +220,7 @@ async function setTokens(res, accessToken, refreshToken) {
         "rToken",
         refreshToken,
         { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 }
-    );
+    )
 };
 
 /**
@@ -198,7 +228,7 @@ async function setTokens(res, accessToken, refreshToken) {
  * @param {Object} data Accepts an object contianing user data.
  * @returns An object with the properly formated user data.
  */
- function extractUserData(data) {
+function extractUserData(data) {
     return {
         id: data.id,
         username: data.username,
@@ -222,16 +252,21 @@ function prepareUserData(data) {
     });
 };
 
-module.exports = () => (req, res, next) => {
-    // if (req.session.user) {
-    //     res.locals.user = req.session.user;
-    //     res.locals.isLogged = true;
-    // };
+/**
+ * Catch and handle db errors.
+ * @param {Object} req The request object generated by "ExpressJs".
+ * @param {Object} error An object consisting of a single key value pair (code and list) which represent the error code and the errors list.
+ */
+function catchDbErrors(req, errors) {
+    const { code, list } = errors;
+    req.errorHandling.sendErrors({ code, list });
+};
 
+module.exports = () => (req, res, next) => {
     req.user = {
         register: (...params) => register(req, res, ...params),
         login: () => login(req, res),
-        logout: () => logout(res),
+        logout: () => logout(req, res),
         checkIfLogged: () => checkIfLogged(req, res),
         update: (...params) => update(req.session, ...params)
     };

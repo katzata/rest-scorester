@@ -12,14 +12,14 @@ const db = mysql.createPool({
  * Create a database entry.
  * @param {Object} data Contains one key value pair.
  * The key represents the table that will be queried.
- * The value represents the fields that will be created.
+ * The value is an object representing the fields that will be created and their respective values.
  */
 function createEntry(data) {
     const table = Object.keys(data)[0];
     const fieldKeys = Object.keys(data[table]).join(", ");
     const fieldValues = Object.values(data[table]).map(el => `'${el}'`).join(", ");
     const query = `INSERT INTO ${table} (${fieldKeys}) VALUES (${fieldValues});`;
-
+    console.log(query);
     return makeQuery(query);
 };
 
@@ -41,14 +41,16 @@ function getEntry(data) {
  * Update a database entry.
  * @param {Object} data Contains one key value pair.
  * The key represents the table that will be queried.
- * The value represents the fields that will be updated.
+ * The value is an object representing the fields that will be updated and their respective values.
  */
-function updateEntry(id, data) {
+function updateEntry(...updateData) {
+    const [id, data] = updateData;
     const table = Object.keys(data)[0];
     const fields = formatFields(data[table]);
     const query = `UPDATE ${table} SET ${fields} WHERE id='${id}';`;
 
     return makeQuery(query);
+    // return new Promise((res, rej) => res([]));
 };
 
 /**
@@ -74,8 +76,8 @@ async function makeQuery(query) {
             if (error) {
                 // !!!ERROR!!!
                 const { stack, message, errno, code, syscall, address, port, fatal } = error;
-                res.push({ error: { code: 503, list: ["No connection to the database."]} });
-                console.log("makeQuery", `stack: ${stack}\n`, `message: ${message}\n`, `errno: ${errno}\n`, `code: ${code}\n`,`syscall: ${syscall}\n`, `address: ${address}\n`, `port: ${port}\n`, fatal)
+                res.push({ error: { code: errno, list: [message]} });
+                // console.log("makeQuery", `stack : ${stack}\n`, `message : ${message}\n`, `errno : ${errno}\n`, `code : ${code}\n`,`syscall : ${syscall}\n`, `address : ${address}\n`, `port : ${port}\n`, fatal)
             } else {
                 res = results;
             };
@@ -101,7 +103,7 @@ module.exports = () => (req, res, next) => {
     req.db = {
         createEntry: (data) => createEntry(data),
         getEntry: (data) => getEntry(data),
-        updateEntry: (...params) => updateEntry(...params),
+        updateEntry: (...data) => updateEntry(...data),
         deleteEntry: (data) => deleteEntry(data)
     };
 

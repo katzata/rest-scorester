@@ -64,8 +64,7 @@ function validateToken(type, token) {
     } catch (err) {
         // !!!ERROR!!!
         console.log(err.message);
-    }
-    
+    };
 };
 
 module.exports = {

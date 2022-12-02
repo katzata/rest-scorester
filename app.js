@@ -14,8 +14,6 @@ const auth = require("./controllers/auth");
 
 const { setResponseHeaders, send404 } = require("./utils/utils");
 
-// const userModel = require("./models/User");
-
 /**
  * Initialises the ExpressJs app (makes the app.js file look a bit cleaner).
  */
@@ -32,7 +30,7 @@ const init = () => {
 
 	app.get("/", (req, res) => {
 		setResponseHeaders(req, res);
-		res.send(JSON.stringify({"test": "yay"}, null, 4));
+		res.send(JSON.stringify({"res": "yay"}, null, 4));
 	});
 
 	app.post("/register",
@@ -85,10 +83,13 @@ const init = () => {
 		}
 	);
 
+	app.post("/logout", (req, res) => {
+		auth.logout(req, res);
+	});
+
 	app.post("/checkIfLogged", (req, res) => {
 		setResponseHeaders(req, res);
 		auth.post(req, res);
-		// res.send(JSON.stringify({"test": "yay"}, null, 4));
 	});
 
 	app.route("*")

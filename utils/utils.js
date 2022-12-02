@@ -45,7 +45,7 @@ function checkOrigin(req) {
         "https://192.168.0.185:3000",
         "https://localhost:3000"
     ];
-    console.log(origin);
+
     return allowedOrigins.includes(origin) ? origin : null;
 };
 

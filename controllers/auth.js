@@ -1,4 +1,4 @@
-const { validationResult } = require('express-validator');
+// const { validationResult } = require('express-validator');
 
 module.exports = {
     async post(req, res) {
@@ -12,29 +12,8 @@ module.exports = {
         };
 
         actions[currentAction]();
-        // if (req.user[action]) {
-        //     try {
-        //         let { errors } = validationResult(req);
-        
-        //         if (errors.length > 0) {
-        //             throw errors.map(req.errorFormating);
-        //         };
-
-        //         const result = await req.user[action](req.body);
-                
-        //         if (result) {
-        //             res.redirect("/");
-        //         };
-        //     } catch (err) {
-        //         res.locals.errorMessages.push(err.message);
-        //         res.render(action, { title: action });
-        //     };
-        // } else {
-        //     res.redirect("404")
-        // };
     },
-    logout(req, res) {
-        req.user.logout(req.session);
-        res.redirect("/");
+    async logout(req, res) {
+        req.user.logout();
     }
 };
