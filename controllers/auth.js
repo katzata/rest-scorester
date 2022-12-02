@@ -1,5 +1,3 @@
-// const { validationResult } = require('express-validator');
-
 module.exports = {
     async post(req, res) {
         const { url, user } = req;
