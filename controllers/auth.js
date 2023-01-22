@@ -5,7 +5,6 @@ module.exports = {
         const actions = {
             login: user.login,
             register: user.register,
-            logout: user.logout,
             checkIfLogged: user.checkIfLogged
         };
 

@@ -62,8 +62,7 @@ function validateToken(type, token) {
     try {
         return jwt.verify(token, passPhrase);
     } catch (err) {
-        // !!!ERROR!!!
-        console.log(err.message);
+        return null;
     };
 };
 

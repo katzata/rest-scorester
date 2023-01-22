@@ -1,16 +1,18 @@
 const fs = require("fs");
 const express = require("express");
-const https = require('https');
-const cookieParser = require('cookie-parser')
-const { body, validationResult } = require('express-validator');
+const https = require("https");
+const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
+const { body, validationResult } = require("express-validator");
 
-require('dotenv').config();
+require("dotenv").config();
 
 const userService = require("./services/user");
 const dbService = require("./services/db");
 const errorHandlingService = require("./services/errorHandling");
 
 const auth = require("./controllers/auth");
+const settings = require("./controllers/settings");
 
 const { setResponseHeaders, send404 } = require("./utils/utils");
 
@@ -29,8 +31,8 @@ const init = () => {
 	app.use(errorHandlingService());
 
 	app.get("/", (req, res) => {
-		setResponseHeaders(req, res);
-		res.send(JSON.stringify({"res": "yay"}, null, 4));
+		setResponseHeaders(req, res)
+			.send(JSON.stringify({"res": "yay"}, null, 4));
 	});
 
 	app.post("/register",
@@ -78,7 +80,8 @@ const init = () => {
 				// !!!ERROR!!!
 				return console.log({ errors: errors.array() });
 			};
-
+			// setResponseHeaders(req, res)
+			// 	.send(JSON.stringify({"res": "yay"}, null, 4));
 			auth.post(req, res);
 		}
 	);
@@ -88,8 +91,17 @@ const init = () => {
 	});
 
 	app.post("/checkIfLogged", (req, res) => {
-		setResponseHeaders(req, res);
 		auth.post(req, res);
+	});
+
+	app.post("/userSettings", (req, res) => {
+		setResponseHeaders(req, res);
+		settings.changeSetting(req, res);
+	});
+
+	app.post("/gameSettings", (req, res) => {
+		setResponseHeaders(req, res);
+		settings.changeSetting(req, res);
 	});
 
 	app.route("*")
@@ -103,7 +115,9 @@ const init = () => {
 		});
 
 	app.listen(port, () => {
-		console.log(`rest scorester listening on http://192.168.0.185:${port}`);
+		if (process.env.NODE_ENV.trim() === "development") {
+			console.log(`rest scorester listening on http://192.168.0.185:${port}`);
+		};
 	});
 
 	if (process.env.NODE_ENV.trim() === "development") {

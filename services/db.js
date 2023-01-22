@@ -1,11 +1,11 @@
 const mysql = require('mysql');
 
 const db = mysql.createPool({
-    connectionLimit : 1,
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: "scorester"
+    connectionLimit : 2,
+    host: process.env.SQL_HOST,
+    user: process.env.SQL_USER,
+    password: process.env.SQL_PASSWORD,
+    database: process.env.SQL_DATABASE
 });
 
 /**
@@ -19,7 +19,6 @@ function createEntry(data) {
     const fieldKeys = Object.keys(data[table]).join(", ");
     const fieldValues = Object.values(data[table]).map(el => `'${el}'`).join(", ");
     const query = `INSERT INTO ${table} (${fieldKeys}) VALUES (${fieldValues});`;
-    console.log(query);
     return makeQuery(query);
 };
 
@@ -34,23 +33,20 @@ function getEntry(data) {
     const fields = formatFields(data[table]);
     const query = `SELECT * FROM ${table} WHERE ${fields.join(" AND ")};`;
     return makeQuery(query);
-    // return new Promise((res, rej) => res([]));
 };
 
 /**
  * Update a database entry.
  * @param {Object} data Contains one key value pair.
  * The key represents the table that will be queried.
- * The value is an object representing the fields that will be updated and their respective values.
+ * The value is an object representing the columns that will be updated and their respective values.
  */
 function updateEntry(...updateData) {
     const [id, data] = updateData;
     const table = Object.keys(data)[0];
-    const fields = formatFields(data[table]);
-    const query = `UPDATE ${table} SET ${fields} WHERE id='${id}';`;
-
+    const columns = formatFields(data[table]);
+    const query = `UPDATE ${table} SET ${columns} WHERE id='${id}';`;
     return makeQuery(query);
-    // return new Promise((res, rej) => res([]));
 };
 
 /**

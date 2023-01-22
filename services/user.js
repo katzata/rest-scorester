@@ -1,4 +1,3 @@
-// const User = require("../models/user");
 const { generateHash, validateHash } = require("../utils/encryption");
 const { generateAccessToken, validateAccessToken, generateRefreshToken, validateRefreshToken } = require("../utils/jwt");
 const { setResponseHeaders } = require("../utils/utils");
@@ -17,7 +16,9 @@ async function register(req, res) {
         "scoreBelowZero": false,
         "scoreTarget": 0,
         "mainTimer": false,
-        "individualTimers": false
+        "turnDuration": 0,
+        "individualTimers": false,
+        "editableFields": false
     };
 
     const query = { users: { username: req.body.username }};
@@ -43,7 +44,7 @@ async function register(req, res) {
                 req.db.updateEntry(createRes.insertId, { users: { token: refreshToken } }).then(updateRes => {
                     if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error);
 
-                    setResponseHeaders(req, res);
+                    setResponseHeaders(req, res, { accessToken, refreshToken });
                     setHTTPCookies(res, accessToken, refreshToken).then((tokenRes) => {
                         tokenRes
                             .status(201)
@@ -55,7 +56,6 @@ async function register(req, res) {
             if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
 
             setResponseHeaders(req, res)
-                .status(200)
                 .send(JSON.stringify({ Errors: `The username ${username} is already registered`}, null, 4));
         };
     });
@@ -73,7 +73,7 @@ async function login(req, res) {
         if (queryRes[0] && queryRes[0].error) return catchDbErrors(req, queryRes[0].error);
 
         const user = queryRes[0];
-        
+
         if (user && user.id) {
             validatePassword(req.body.password, user.password).then((passCheckRes) => {
                 if (passCheckRes) {
@@ -82,14 +82,12 @@ async function login(req, res) {
 
                     const updateData = { users: { token: refreshToken }};
                     req.db.updateEntry(userData.id, updateData).then(updateRes => {
-                        if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error)
+                        if (updateRes[0] && updateRes[0].error) {
+                            return catchDbErrors(req, updateRes[0].error);
+                        };
 
-                        setResponseHeaders(req, res);
-                        setHTTPCookies(res, accessToken, refreshToken).then((tokenRes) => {
-                            tokenRes
-                                .status(202)
-                                .send(prepareUserData(userData, null, 4));
-                        });
+                        setResponseHeaders(req, res, { accessToken, refreshToken })
+                            .send(prepareUserData(userData, null, 4));
                     });
                 } else {
                     req.errorHandling.sendErrors({ code: 409, list: ["Wrong username or password"]});
@@ -114,9 +112,7 @@ async function logout(req, res) {
     req.db.updateEntry(id, updateData).then(updateRes => {
         if (updateRes[0] && updateRes[0].error) return catchDbErrors(req, updateRes[0].error)
 
-        setResponseHeaders(req, res)
-            .clearCookie("aToken")
-            .clearCookie("rToken")
+        setResponseHeaders(req, res, { accessToken: "clear", refreshToken: "clear" })
             .status(201)
             .send(JSON.stringify({"res": "yay"}));
     });
@@ -144,7 +140,9 @@ async function checkIfLogged(req, res) {
                         .status(200)
                         .send(prepareUserData(user, null, 4));
                 } else {
-                    setResponseHeaders(req, res).status(200);
+                    setResponseHeaders(req, res)
+                        .status(200)
+                        .send(JSON.stringify({error: "jwt expired"}));
                 };
             };
         });
@@ -155,15 +153,34 @@ async function checkIfLogged(req, res) {
  * Updates the user data in the database.
  * @param {Object} data An object containing key value pairs representing the columns and values that will be updated.
  */
-async function update(data) {
-    console.log();
-    // req.db.updateEntry(id, updateData).then(updateRes => {
-    //     console.log("updateRes", updateRes);
-        
-    // setResponseHeaders(req, res);
-    //     setHTTPCookies(res, accessToken, refreshToken)
-    //         .send(prepareUserData(userData, null, 4));
-    // });
+async function updateSettings(req, res) {
+    const { url, body, cookies } = req;
+    const { id } = validateToken(cookies.rToken);
+    const query = {users: { id }};
+    const column = url.slice(1);
+
+    req.db.getEntry(query).then(getRes => {
+        const userData = extractUserData(getRes[0]);
+
+        if (userData) {
+            for (let [setting, value] of Object.entries(body)) {
+                if (value === "false") value = false;
+                if (value === "true") value = true;
+
+                userData[column][setting] = value;
+            };
+
+            const updatedData = { users: Object.fromEntries([[column.replace("S", "_s"), JSON.stringify(userData[column])]]) };
+
+            req.db.updateEntry(id, updatedData).then(updateRes => {
+                console.log(updateRes);
+                const { changedRows } = updateRes;
+                const response = changedRows ? { changedRows } : updateRes;
+                
+                setResponseHeaders(req, res).send(JSON.stringify(response));
+            });
+        };
+    });
 };
 
 /**
@@ -192,18 +209,14 @@ function generateTokens(user) {
 /**
  * Validate refresh JWT token.
  * @param {String} user The JWT token.
- * @returns EIther the decrypted data of null in case the token is not ok.
+ * @returns Either the decrypted data or null in case the token is not ok.
  */
  function validateToken(token) {
     const result = validateRefreshToken(token);
-    return result.id ? result : null;
+    return result && result.id ? result : null;
 };
 
-/**
- * Sets http only cookies.
- * @param {Object} res The response object generated by "ExpressJs".
- * @returns the "ExpressJs" res.cookie() function (while setting the headers) in order to keep it chainable.
- */
+
 async function setHTTPCookies(res, accessToken, refreshToken) {
     const cookieOptions = {
         httpOnly: true,
@@ -268,7 +281,7 @@ module.exports = () => (req, res, next) => {
         login: () => login(req, res),
         logout: () => logout(req, res),
         checkIfLogged: () => checkIfLogged(req, res),
-        update: (...params) => update(req.session, ...params)
+        updateSettings: (...params) => updateSettings(req, res, ...params)
     };
 
     next();
