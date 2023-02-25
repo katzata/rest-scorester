@@ -12,5 +12,8 @@ module.exports = {
     },
     async logout(req, res) {
         req.user.logout();
-    }
+    },
+    async delete(req, res) {
+        req.user.delete();
+    },
 };

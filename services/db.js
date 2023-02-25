@@ -55,25 +55,25 @@ function updateEntry(...updateData) {
  * The key represents the table that will be queried.
  * The value represents the id(row) that will be deleted.
  */
-async function deleteEntry(data) {
-    
+async function deleteEntry(id) {
+    const query = `DELETE FROM users WHERE id='${id}';`;
+    return makeQuery(query);
 };
 
 /**
  * Makes a database query.
  * @param {String} query An SQL statement (SELECT, INSERT, UPDATE, DELETE).
- * @returns Alwayes a resolved promise in order to keep the error handling here.
+ * @returns Always a resolved promise in order to keep the error handling here.
  */
 async function makeQuery(query) {
-    return new Promise((resolve, reject) => {
-        db.query(query, function (error, results, fields) {
+    return new Promise(resolve => {
+        db.query(query, function (error, results) {
             let res = [];
-            
+
             if (error) {
                 // !!!ERROR!!!
                 const { stack, message, errno, code, syscall, address, port, fatal } = error;
                 res.push({ error: { code: errno, list: [message]} });
-                // console.log("makeQuery", `stack : ${stack}\n`, `message : ${message}\n`, `errno : ${errno}\n`, `code : ${code}\n`,`syscall : ${syscall}\n`, `address : ${address}\n`, `port : ${port}\n`, fatal)
             } else {
                 res = results;
             };
@@ -100,7 +100,7 @@ module.exports = () => (req, res, next) => {
         createEntry: (data) => createEntry(data),
         getEntry: (data) => getEntry(data),
         updateEntry: (...data) => updateEntry(...data),
-        deleteEntry: (data) => deleteEntry(data)
+        deleteEntry: (...data) => deleteEntry(...data)
     };
 
     next();

@@ -16,16 +16,13 @@ const settings = require("./controllers/settings");
 
 const { setResponseHeaders, send404 } = require("./utils/utils");
 
-/**
- * Initialises the ExpressJs app (makes the app.js file look a bit cleaner).
- */
 const init = () => {
 	const port = process.env.NODE_ENV.trim() === "development" ? 5000 : 3000;
 	const app = express();
-	
+
 	app.use(express.urlencoded({ extended: true }));
 	app.use(cookieParser());
-	
+
 	app.use(dbService());
 	app.use(userService());
 	app.use(errorHandlingService());
@@ -80,8 +77,6 @@ const init = () => {
 				// !!!ERROR!!!
 				return console.log({ errors: errors.array() });
 			};
-			// setResponseHeaders(req, res)
-			// 	.send(JSON.stringify({"res": "yay"}, null, 4));
 			auth.post(req, res);
 		}
 	);
@@ -90,17 +85,19 @@ const init = () => {
 		auth.logout(req, res);
 	});
 
+	app.post("/delete", (req, res) => {
+		auth.delete(req, res);
+	});
+
 	app.post("/checkIfLogged", (req, res) => {
 		auth.post(req, res);
 	});
 
 	app.post("/userSettings", (req, res) => {
-		setResponseHeaders(req, res);
 		settings.changeSetting(req, res);
 	});
 
 	app.post("/gameSettings", (req, res) => {
-		setResponseHeaders(req, res);
 		settings.changeSetting(req, res);
 	});
 
@@ -114,23 +111,24 @@ const init = () => {
 			send404(res);
 		});
 
-	app.listen(port, () => {
-		if (process.env.NODE_ENV.trim() === "development") {
-			console.log(`rest scorester listening on http://192.168.0.185:${port}`);
-		};
-	});
+	app.listen(port);
 
-	if (process.env.NODE_ENV.trim() === "development") {
-		const httpsPort = port + 1;
-		const secured = https.createServer(
-			{ key: fs.readFileSync("./ssl/localhost.pem"), cert: fs.readFileSync("./ssl/localhost.crt") },
-			app
-		);
-		
-		secured.listen(httpsPort, function() {
-			console.log(`rest scorester listening on https://192.168.0.185:${httpsPort}`)
-		});
-	};
+	// if (process.env.NODE_ENV.trim() === "development") {
+	// 	const httpsPort = port + 1;
+	// 	const secured = https.createServer(
+	// 		{
+	// 			// key: fs.readFileSync("./ssl/localhost.pem"),
+	// 			// cert: fs.readFileSync("./ssl/localhost.crt")
+	// 			key: fs.readFileSync("./ssl/localhost.pem"),
+	// 			cert: fs.readFileSync("./ssl/localhost.crt")
+	// 		},
+	// 		app
+	// 	);
+
+	// 	secured.listen(httpsPort, function() {
+	// 		console.log(`rest scorester listening on https://192.168.0.185:${httpsPort}`)
+	// 	});
+	// };
 };
 
 init();
